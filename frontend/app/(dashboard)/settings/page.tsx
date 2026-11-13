@@ -2,14 +2,16 @@
 
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Save, RotateCcw } from "lucide-react";
+import { Save, RotateCcw, Compass, Trash2, SunMedium } from "lucide-react";
 import { api } from "@/lib/api";
 import { SkeletonCard } from "@/components/ui-badges";
 import { Button, Card } from "@/components/ui-primitives";
-import { useToast } from "@/components/providers";
+import { useToast, useTour } from "@/components/providers";
+import { ThemeSegmentedControl } from "@/components/theme-toggle";
 
 export default function SettingsPage() {
   const { notify } = useToast();
+  const { openTour } = useTour();
   const queryClient = useQueryClient();
 
   const { data: user } = useQuery({
@@ -77,6 +79,14 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries();
       notify("Demo reset", "Sample messages restored.", "info");
+    },
+  });
+
+  const purgeDemoMutation = useMutation({
+    mutationFn: api.purgeDemo,
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      notify("Clean workspace active", "Demo data removed. Ready for live data.");
     },
   });
 
@@ -227,18 +237,71 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* Appearance & Product Guidance */}
+        <Card className="stagger-3 p-8 space-y-6">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+            Appearance & Guidance
+          </h2>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-2 border-b border-[var(--border-subtle)] pb-6">
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                Interface theme
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Switch between clean professional light mode and dark mode.
+              </p>
+            </div>
+            <ThemeSegmentedControl />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                Feature walkthrough
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Revisit the 3-step guide explaining channels, urgency triage, and replies.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={openTour}
+            >
+              <Compass className="h-3.5 w-3.5" />
+              Launch tour
+            </Button>
+          </div>
+        </Card>
+
         {/* Actions */}
         <div className="stagger-4 flex flex-wrap items-center justify-between gap-4 pt-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            loading={resetDemoMutation.isPending}
-            onClick={() => resetDemoMutation.mutate()}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reset sample data
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              loading={purgeDemoMutation.isPending}
+              onClick={() => purgeDemoMutation.mutate()}
+              title="Remove fake sample messages and switch to clean real workspace"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-amber-500" />
+              Clear demo data
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              loading={resetDemoMutation.isPending}
+              onClick={() => resetDemoMutation.mutate()}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset sample data
+            </Button>
+          </div>
 
           <Button
             type="submit"

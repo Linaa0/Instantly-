@@ -151,32 +151,46 @@ def register_user(payload: AuthRegisterRequest, db: Session = Depends(get_db)):
         )
     )
 
-    # Attach to the seeded demo workspace so newly registered evaluators can immediately explore data
-    _, demo_ws = ensure_demo_workspace_seeded(db)
+    # Create a dedicated, clean workspace for the registered user (never pre-seeded with fake demo data)
+    user_slug_prefix = re.sub(r"[^a-zA-Z0-9]", "-", user.full_name.lower()).strip("-") or "workspace"
+    ws = Workspace(
+        name=f"{user.full_name.split()[0]}'s Workspace",
+        slug=f"{user_slug_prefix}-{secrets.token_hex(4)}",
+        owner_id=user.id,
+        is_demo=False,
+    )
+    db.add(ws)
+    db.flush()
+
     membership = WorkspaceMembership(
-        workspace_id=demo_ws.id,
+        workspace_id=ws.id,
         user_id=user.id,
-        role="Admin",
+        role="Owner",
         status="Active",
     )
     db.add(membership)
+
+    # Clean initial integration records (disconnected, waiting for user's real accounts)
+    db.add(Integration(workspace_id=ws.id, platform="gmail", status="disconnected"))
+    db.add(Integration(workspace_id=ws.id, platform="slack", status="disconnected"))
+
     db.add(
         AuditEvent(
-            workspace_id=demo_ws.id,
+            workspace_id=ws.id,
             actor_name=user.full_name,
-            event_type="USER_REGISTERED",
-            description=f"{user.full_name} ({user.email}) joined {demo_ws.name}.",
+            event_type="WORKSPACE_CREATED",
+            description=f"{user.full_name} created personal workspace {ws.name}.",
         )
     )
     db.commit()
 
     token = create_access_token(user.id)
-    return AuthTokenOut(access_token=token, user=_build_user_out(user, demo_ws, "Admin"))
+    return AuthTokenOut(access_token=token, user=_build_user_out(user, ws, "Owner"))
 
 
 @router.post("/auth/login", response_model=AuthTokenOut)
 def login_user(payload: AuthLoginRequest, db: Session = Depends(get_db)):
-    demo_user, demo_ws = ensure_demo_workspace_seeded(db)
+    ensure_demo_workspace_seeded(db)
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
@@ -184,12 +198,46 @@ def login_user(payload: AuthLoginRequest, db: Session = Depends(get_db)):
     membership = (
         db.query(WorkspaceMembership).filter(WorkspaceMembership.user_id == user.id).first()
     )
-    ws = (
-        db.query(Workspace).filter(Workspace.id == membership.workspace_id).first()
-        if membership
-        else demo_ws
-    )
-    role = membership.role if membership else "Member"
+    if membership:
+        ws = db.query(Workspace).filter(Workspace.id == membership.workspace_id).first()
+        # If this is a real user whose workspace was attached to the demo workspace, migrate to their own clean workspace
+        if ws and ws.is_demo and user.email != "alex.morgan@instantly.ai":
+            user_slug_prefix = re.sub(r"[^a-zA-Z0-9]", "-", user.full_name.lower()).strip("-") or "workspace"
+            ws = Workspace(
+                name=f"{user.full_name.split()[0]}'s Workspace",
+                slug=f"{user_slug_prefix}-{secrets.token_hex(4)}",
+                owner_id=user.id,
+                is_demo=False,
+            )
+            db.add(ws)
+            db.flush()
+            membership.workspace_id = ws.id
+            membership.role = "Owner"
+            db.add(Integration(workspace_id=ws.id, platform="gmail", status="disconnected"))
+            db.add(Integration(workspace_id=ws.id, platform="slack", status="disconnected"))
+            db.commit()
+    else:
+        user_slug_prefix = re.sub(r"[^a-zA-Z0-9]", "-", user.full_name.lower()).strip("-") or "workspace"
+        ws = Workspace(
+            name=f"{user.full_name.split()[0]}'s Workspace",
+            slug=f"{user_slug_prefix}-{secrets.token_hex(4)}",
+            owner_id=user.id,
+            is_demo=False,
+        )
+        db.add(ws)
+        db.flush()
+        membership = WorkspaceMembership(
+            workspace_id=ws.id,
+            user_id=user.id,
+            role="Owner",
+            status="Active",
+        )
+        db.add(membership)
+        db.add(Integration(workspace_id=ws.id, platform="gmail", status="disconnected"))
+        db.add(Integration(workspace_id=ws.id, platform="slack", status="disconnected"))
+        db.commit()
+
+    role = membership.role if membership else "Owner"
     token = create_access_token(user.id)
     return AuthTokenOut(access_token=token, user=_build_user_out(user, ws, role))
 
@@ -1575,6 +1623,23 @@ def restore_demo_integration(
         db.commit()
 
     return {"status": "demo", "platform": platform}
+
+
+@router.post("/workspace/purge-demo")
+def purge_workspace_demo_endpoint(
+    db: Session = Depends(get_db),
+    ctx: tuple[User, Workspace, str] = Depends(get_current_context),
+):
+    _, ws, _ = ctx
+    ws.is_demo = False
+    purge_demo_data_for_workspace(db, ws.id)
+    integs = db.query(Integration).filter(Integration.workspace_id == ws.id).all()
+    for integ in integs:
+        if integ.status == "demo":
+            integ.status = "disconnected"
+            integ.account_identifier = None
+    db.commit()
+    return {"status": "purged", "message": "Demo data removed. Ready for live connections."}
 
 
 # ─────────────────────────────────────────────────────────

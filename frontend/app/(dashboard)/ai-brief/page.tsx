@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Clock } from "lucide-react";
+import { Clock, Sparkles } from "lucide-react";
 import { api } from "@/lib/api";
 import { MessageItem, UrgencyCategory } from "@/types";
 import {
@@ -11,7 +12,7 @@ import {
   SkeletonCard,
   UrgencyBadge,
 } from "@/components/ui-badges";
-import { Button } from "@/components/ui-primitives";
+import { Button, Card } from "@/components/ui-primitives";
 import { MessageInspectorModal } from "@/components/message-inspector";
 
 const SECTIONS: {
@@ -65,6 +66,39 @@ export default function AIBriefPage() {
       <div className="space-y-6">
         <SkeletonCard />
         <SkeletonCard />
+      </div>
+    );
+  }
+
+  if (messages.length === 0) {
+    return (
+      <div className="space-y-8" data-testid="ai-brief-page">
+        <div className="stagger-1 pb-6 border-b border-[var(--border-subtle)]">
+          <h1 className="text-3xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+            Daily brief
+          </h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            Every message sorted by what needs your attention first.
+          </p>
+        </div>
+        <Card className="p-12 text-center space-y-4 max-w-lg mx-auto border-[var(--border-strong)] bg-[var(--bg-elevated)]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent-surface)] text-[var(--accent)] mx-auto">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
+              Your inbox is quiet
+            </h2>
+            <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+              No communications have been synced yet. Link your Gmail or Slack account to let AI analyze your real priorities.
+            </p>
+          </div>
+          <Link href="/integrations" className="inline-block pt-2">
+            <Button variant="primary" size="sm">
+              Connect Channels
+            </Button>
+          </Link>
+        </Card>
       </div>
     );
   }

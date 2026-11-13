@@ -83,6 +83,10 @@ export const api = {
     request<{ status: string; message: string }>("/demo/reset", {
       method: "POST",
     }),
+  purgeDemo: () =>
+    request<{ status: string; message: string }>("/workspace/purge-demo", {
+      method: "POST",
+    }),
 
   // Messages & Inbox
   getMessages: (params?: {

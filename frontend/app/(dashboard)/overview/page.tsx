@@ -8,6 +8,9 @@ import {
   ArrowRight,
   CheckCircle2,
   CalendarClock,
+  Mail,
+  MessageSquare,
+  Compass,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -31,10 +34,11 @@ import {
   Stat,
   StreamingText,
 } from "@/components/ui-primitives";
-import { useToast } from "@/components/providers";
+import { useToast, useTour } from "@/components/providers";
 
 export default function OverviewPage() {
   const { notify } = useToast();
+  const { openTour } = useTour();
   const queryClient = useQueryClient();
   const [streamingBrief, setStreamingBrief] = useState(false);
 
@@ -78,6 +82,86 @@ export default function OverviewPage() {
           Make sure the backend server is running on port 8000.
         </p>
       </Card>
+    );
+  }
+
+  if (data.total_messages === 0) {
+    return (
+      <div className="space-y-12" data-testid="overview-page">
+        <section className="stagger-1 pb-8 border-b border-[var(--border-subtle)]">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-2">
+            Welcome to Instantly
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+            Your real inbox, sorted for you.
+          </h1>
+          <p className="mt-2 text-sm text-[var(--text-secondary)] max-w-xl">
+            You are in a clean, isolated workspace with zero simulated data. Connect your Gmail or Slack account to start receiving your daily executive briefing and prioritized tasks.
+          </p>
+        </section>
+
+        {/* Quick onboarding action cards */}
+        <section className="stagger-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="p-8 space-y-4 border-[var(--border-strong)] bg-[var(--bg-elevated)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-400">
+              <Mail className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">
+                Connect Gmail
+              </h2>
+              <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                Sync unread threads with read-only access. Instantly detects urgencies, extracts deadlines, and drafts context-aware replies.
+              </p>
+            </div>
+            <Link href="/integrations" className="inline-block pt-2">
+              <Button variant="primary" size="sm">
+                Connect Gmail
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </Card>
+
+          <Card className="p-8 space-y-4 border-[var(--border-strong)] bg-[var(--bg-elevated)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-surface)] text-[var(--accent)]">
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">
+                Connect Slack
+              </h2>
+              <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                Connect your team channels and direct messages. Everyone in your workspace gets their own personal Slack connection.
+              </p>
+            </div>
+            <Link href="/integrations" className="inline-block pt-2">
+              <Button variant="secondary" size="sm">
+                Connect Slack
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </Card>
+        </section>
+
+        <section className="stagger-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-surface)] text-[var(--accent)]">
+              <Compass className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                Want a quick walkthrough?
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Take our 3-step feature tour to see how priority triage and AI drafts work.
+              </p>
+            </div>
+          </div>
+          <Button variant="secondary" size="sm" onClick={openTour} className="shrink-0">
+            Launch tour
+          </Button>
+        </section>
+      </div>
     );
   }
 

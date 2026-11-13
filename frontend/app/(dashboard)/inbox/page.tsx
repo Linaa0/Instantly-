@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
@@ -21,6 +21,7 @@ import { MessageInspector } from "@/components/message-inspector";
 import { cn, formatRelativeTime, getInitials } from "@/lib/utils";
 
 function InboxContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -224,13 +225,25 @@ function InboxContent() {
             </>
           ) : messages.length === 0 ? (
             <EmptyState
-              title="No messages match your filters."
-              actionLabel="Clear filters"
+              title={
+                search || urgencyFilter !== "ALL" || sourceFilter !== "all" || unreadOnly
+                  ? "No messages match your filters."
+                  : "No messages yet. Link Gmail or Slack to start seeing your feed."
+              }
+              actionLabel={
+                search || urgencyFilter !== "ALL" || sourceFilter !== "all" || unreadOnly
+                  ? "Clear filters"
+                  : "Go to Integrations"
+              }
               onAction={() => {
-                setSearch("");
-                setUrgencyFilter("ALL");
-                setSourceFilter("all");
-                setUnreadOnly(false);
+                if (search || urgencyFilter !== "ALL" || sourceFilter !== "all" || unreadOnly) {
+                  setSearch("");
+                  setUrgencyFilter("ALL");
+                  setSourceFilter("all");
+                  setUnreadOnly(false);
+                } else {
+                  router.push("/integrations");
+                }
               }}
             />
           ) : (

@@ -30,6 +30,33 @@
   --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Professional, crisp white theme for Light Mode */
+html.light,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #f8f9fa;
+  --bg-elevated: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-hover: #f1f3f5;
+
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+
+  --accent: #634fd6;
+  --accent-hover: #533ec7;
+  --accent-soft: #4f46e5;
+  --accent-surface: rgba(99, 79, 214, 0.08);
+
+  --status-urgent: #dc2626;
+  --status-warning: #d97706;
+  --status-success: #16a34a;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -163,7 +190,7 @@ h2 {
   }
 }
 
-/* Minimal dark scrollbar */
+/* Minimal adaptive scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -180,4 +207,16 @@ h2 {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+html.light .shadow-card {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
 }

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui-primitives";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 /**
@@ -146,6 +147,7 @@ export function LandingView() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle />
             {isLoggedIn ? (
               <Link href="/overview" data-testid="nav-open-workspace">
                 <Button variant="primary" size="md">
@@ -199,6 +201,7 @@ export function LandingView() {
               Features
             </a>
             <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center gap-3">
+              <ThemeToggle />
               {isLoggedIn ? (
                 <Link href="/overview" className="w-full">
                   <Button variant="primary" size="md" className="w-full">

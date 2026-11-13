@@ -226,7 +226,11 @@ export default function TasksPage() {
       <div className="stagger-3 space-y-2.5">
         {tasks.length === 0 ? (
           <EmptyState
-            title="No tasks in this view."
+            title={
+              statusFilter !== "all"
+                ? "No tasks match this filter."
+                : "No tasks yet. Create one above or connect your channels to auto-extract action items."
+            }
             actionLabel={statusFilter !== "all" ? "Show all tasks" : undefined}
             onAction={statusFilter !== "all" ? () => setStatusFilter("all") : undefined}
           />

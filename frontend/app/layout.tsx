@@ -31,8 +31,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${inter.variable}`}>
-      <body className="min-h-screen bg-[var(--bg-base)] font-sans text-[var(--text-primary)] antialiased selection:bg-[var(--accent)]/25 selection:text-white">
+    <html lang="en" suppressHydrationWarning className={`dark ${inter.variable}`}>
+      <body className="min-h-screen bg-[var(--bg-base)] font-sans text-[var(--text-primary)] antialiased selection:bg-[var(--accent)]/25 selection:text-white transition-colors duration-200">
         <Providers>{children}</Providers>
       </body>
     </html>

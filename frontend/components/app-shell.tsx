@@ -23,12 +23,16 @@ import {
   X,
   LogOut,
   RotateCcw,
+  Compass,
+  Trash2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, formatRelativeTime, getInitials } from "@/lib/utils";
 import { Logo } from "@/components/logo";
 import { LoadingDots } from "@/components/ui-primitives";
-import { useToast } from "@/components/providers";
+import { useToast, useTour } from "@/components/providers";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { OnboardingTour } from "@/components/onboarding-tour";
 
 const NAV_ITEMS = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
@@ -47,6 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { notify } = useToast();
+  const { openTour } = useTour();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -94,6 +99,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     onSuccess: () => {
       queryClient.invalidateQueries();
       notify("Demo reset", "Sample messages restored.", "info");
+      setProfileOpen(false);
+    },
+  });
+
+  const purgeDemoMutation = useMutation({
+    mutationFn: api.purgeDemo,
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      notify("Clean workspace active", "Demo messages removed. Ready for live data.");
       setProfileOpen(false);
     },
   });
@@ -295,6 +309,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </button>
 
+            {/* Product Tour Guide Button */}
+            <button
+              type="button"
+              onClick={openTour}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)] transition"
+              title="Open Feature Guide"
+            >
+              <Compass className="h-3.5 w-3.5 text-[var(--accent)]" />
+              <span className="hidden sm:inline">Guide</span>
+            </button>
+
+            {/* White / Dark Mode Toggle */}
+            <ThemeToggle />
+
             {/* Notifications */}
             <div className="relative">
               <button
@@ -387,25 +415,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <Link
                       href="/settings"
                       onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-[var(--text-primary)]"
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
                     >
                       <Settings className="h-3.5 w-3.5" />
                       Settings
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        openTour();
+                      }}
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                    >
+                      <Compass className="h-3.5 w-3.5" />
+                      Product tour
+                    </button>
                     {overview?.demo_mode_active && (
-                      <button
-                        type="button"
-                        onClick={() => resetDemoMutation.mutate()}
-                        className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-[var(--text-primary)]"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Reset demo
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => purgeDemoMutation.mutate()}
+                          disabled={purgeDemoMutation.isPending}
+                          className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-amber-500" />
+                          Clear demo data
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => resetDemoMutation.mutate()}
+                          className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Reset demo
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
+                      className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       Sign out
@@ -422,6 +472,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* Feature Walkthrough Onboarding Tour */}
+      <OnboardingTour />
     </div>
   );
 }
