@@ -388,8 +388,12 @@ def ensure_demo_workspace_seeded(db: Session, force_reset: bool = False) -> tupl
             job_title="VP of Product & Operations",
             hashed_password=get_password_hash("InstantlyDemo2026!"),
             is_active=True,
+            email_verified=True,
         )
         db.add(user)
+        db.flush()
+    elif not user.email_verified:
+        user.email_verified = True
         db.flush()
 
     pref = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()

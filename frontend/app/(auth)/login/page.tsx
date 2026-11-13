@@ -51,7 +51,13 @@ function LoginForm() {
       notify("Welcome back", `Signed in as ${res.user.full_name}.`);
       router.push(nextUrl.startsWith("/") ? nextUrl : "/overview");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Could not sign in.");
+      const msg = err instanceof Error ? err.message : "Could not sign in.";
+      if (msg.toLowerCase().includes("not verified")) {
+        notify("Verification required", "Please enter the code sent to your email.");
+        router.push(`/register?step=verify&email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }

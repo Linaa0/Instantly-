@@ -197,6 +197,26 @@ export interface UserProfile {
   workspace_name: string;
   role: string;
   is_demo: boolean;
+  email_verified?: boolean;
+}
+
+export interface AuthRegisterResult {
+  status: string;
+  email: string;
+  message: string;
+  expires_in_seconds?: number;
+  debug_otp?: string | null;
+  access_token?: string;
+  token_type?: string;
+  user?: UserProfile;
+}
+
+export interface OTPResponse {
+  status: string;
+  email: string;
+  message: string;
+  expires_in_seconds?: number;
+  debug_otp?: string | null;
 }
 
 export interface UserPreferences {

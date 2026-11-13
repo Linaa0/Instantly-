@@ -14,6 +14,7 @@ from app.integrations.connectors import GMAIL_SCOPES, SLACK_SCOPES, GmailConnect
 from app.models.entities import (
     AIAnalysis,
     AuditEvent,
+    EmailVerificationCode,
     Integration,
     IntegrationCredential,
     InternalComment,
@@ -37,6 +38,7 @@ from app.schemas.api import (
     AssignmentOut,
     AuthLoginRequest,
     AuthRegisterRequest,
+    AuthRegisterResponse,
     AuthTokenOut,
     CommentCreateRequest,
     DashboardOverviewOut,
@@ -59,7 +61,11 @@ from app.schemas.api import (
     UserOut,
     UserPreferenceOut,
     UserPreferenceUpdateRequest,
+    VerifyOTPRequest,
+    ResendOTPRequest,
+    ResendOTPResponse,
 )
+from app.services.email_service import send_otp_email
 from app.security.auth import (
     create_access_token,
     decode_access_token,
@@ -114,6 +120,7 @@ def _build_user_out(user: User, ws: Workspace, role: str) -> UserOut:
         workspace_name=ws.name,
         role=role,
         is_demo=ws.is_demo,
+        email_verified=getattr(user, "email_verified", True),
     )
 
 
@@ -121,71 +128,212 @@ def _build_user_out(user: User, ws: Workspace, role: str) -> UserOut:
 # AUTHENTICATION ENDPOINTS
 # ─────────────────────────────────────────────────────────
 
-@router.post("/auth/register", response_model=AuthTokenOut, status_code=status.HTTP_201_CREATED)
+@router.post("/auth/register", response_model=AuthRegisterResponse, status_code=status.HTTP_201_CREATED)
 def register_user(payload: AuthRegisterRequest, db: Session = Depends(get_db)):
     ensure_demo_workspace_seeded(db)
-    existing = db.query(User).filter(User.email == payload.email.lower()).first()
+    email_clean = payload.email.lower().strip()
+    existing = db.query(User).filter(User.email == email_clean).first()
     if existing:
-        raise HTTPException(status_code=400, detail="An account with this email already exists.")
-
-    user = User(
-        email=payload.email.lower(),
-        full_name=payload.full_name.strip(),
-        job_title="Workspace Owner",
-        hashed_password=get_password_hash(payload.password),
-        is_active=True,
-    )
-    db.add(user)
-    db.flush()
-
-    db.add(
-        UserPreference(
-            user_id=user.id,
-            default_reply_tone="professional",
-            ai_provider="heuristic",
-            ai_model_name="gpt-4o-mini",
-            auto_extract_tasks=True,
-            morning_brief_time="08:00",
-            high_priority_notifications=True,
-            demo_mode_enabled=True,
+        if existing.email_verified:
+            raise HTTPException(status_code=400, detail="An account with this email already exists.")
+        user = existing
+        user.full_name = payload.full_name.strip()
+        user.hashed_password = get_password_hash(payload.password)
+    else:
+        user = User(
+            email=email_clean,
+            full_name=payload.full_name.strip(),
+            job_title="Workspace Owner",
+            hashed_password=get_password_hash(payload.password),
+            is_active=True,
+            email_verified=False,
         )
-    )
+        db.add(user)
+        db.flush()
 
-    # Create a dedicated, clean workspace for the registered user (never pre-seeded with fake demo data)
-    user_slug_prefix = re.sub(r"[^a-zA-Z0-9]", "-", user.full_name.lower()).strip("-") or "workspace"
-    ws = Workspace(
-        name=f"{user.full_name.split()[0]}'s Workspace",
-        slug=f"{user_slug_prefix}-{secrets.token_hex(4)}",
-        owner_id=user.id,
-        is_demo=False,
-    )
-    db.add(ws)
-    db.flush()
+        db.add(
+            UserPreference(
+                user_id=user.id,
+                default_reply_tone="professional",
+                ai_provider="heuristic",
+                ai_model_name="gpt-4o-mini",
+                auto_extract_tasks=True,
+                morning_brief_time="08:00",
+                high_priority_notifications=True,
+                demo_mode_enabled=False,
+            )
+        )
 
-    membership = WorkspaceMembership(
-        workspace_id=ws.id,
-        user_id=user.id,
-        role="Owner",
-        status="Active",
-    )
-    db.add(membership)
+        # Create a dedicated, clean workspace for the registered user (never pre-seeded with fake demo data)
+        user_slug_prefix = re.sub(r"[^a-zA-Z0-9]", "-", user.full_name.lower()).strip("-") or "workspace"
+        ws = Workspace(
+            name=f"{user.full_name.split()[0]}'s Workspace",
+            slug=f"{user_slug_prefix}-{secrets.token_hex(4)}",
+            owner_id=user.id,
+            is_demo=False,
+        )
+        db.add(ws)
+        db.flush()
 
-    # Clean initial integration records (disconnected, waiting for user's real accounts)
-    db.add(Integration(workspace_id=ws.id, platform="gmail", status="disconnected"))
-    db.add(Integration(workspace_id=ws.id, platform="slack", status="disconnected"))
-
-    db.add(
-        AuditEvent(
+        membership = WorkspaceMembership(
             workspace_id=ws.id,
-            actor_name=user.full_name,
-            event_type="WORKSPACE_CREATED",
-            description=f"{user.full_name} created personal workspace {ws.name}.",
+            user_id=user.id,
+            role="Owner",
+            status="Active",
         )
+        db.add(membership)
+
+        # Clean initial integration records (disconnected, waiting for user's real accounts)
+        db.add(Integration(workspace_id=ws.id, platform="gmail", status="disconnected"))
+        db.add(Integration(workspace_id=ws.id, platform="slack", status="disconnected"))
+
+        db.add(
+            AuditEvent(
+                workspace_id=ws.id,
+                actor_name=user.full_name,
+                event_type="WORKSPACE_CREATED",
+                description=f"{user.full_name} created personal workspace {ws.name}.",
+            )
+        )
+        db.commit()
+
+    # Generate cryptographically secure 6-digit numeric OTP
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+
+    # Invalidate older pending codes for this email
+    db.query(EmailVerificationCode).filter(
+        EmailVerificationCode.email == email_clean,
+        EmailVerificationCode.is_used.is_(False),
+    ).update({"is_used": True})
+
+    verification_record = EmailVerificationCode(
+        email=email_clean,
+        code=otp_code,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+        is_used=False,
     )
+    db.add(verification_record)
     db.commit()
 
+    send_otp_email(to_email=user.email, full_name=user.full_name, otp_code=otp_code)
+
     token = create_access_token(user.id)
-    return AuthTokenOut(access_token=token, user=_build_user_out(user, ws, "Owner"))
+    return AuthRegisterResponse(
+        status="verification_required",
+        email=user.email,
+        message=f"A 6-digit verification code has been sent to {user.email}.",
+        expires_in_seconds=600,
+        debug_otp=otp_code if (not settings.SMTP_HOST or settings.DEMO_MODE) else None,
+        access_token=token,
+        token_type="bearer",
+        user=_build_user_out(user, ws, "Owner"),
+    )
+
+
+@router.post("/auth/verify-otp", response_model=AuthTokenOut)
+def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
+    email_clean = payload.email.lower().strip()
+    code_clean = payload.code.strip()
+
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with this email.")
+
+    now = datetime.now(timezone.utc)
+    rec = (
+        db.query(EmailVerificationCode)
+        .filter(
+            EmailVerificationCode.email == email_clean,
+            EmailVerificationCode.is_used.is_(False),
+        )
+        .order_by(EmailVerificationCode.created_at.desc())
+        .first()
+    )
+
+    if not rec:
+        raise HTTPException(status_code=400, detail="No active verification code found. Please request a new code.")
+
+    expires_at = rec.expires_at if rec.expires_at.tzinfo else rec.expires_at.replace(tzinfo=timezone.utc)
+    if now > expires_at:
+        rec.is_used = True
+        db.commit()
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+
+    if rec.attempts >= 5:
+        rec.is_used = True
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="Too many incorrect attempts. Please request a new verification code.",
+        )
+
+    if rec.code != code_clean:
+        rec.attempts += 1
+        db.commit()
+        remaining = max(0, 5 - rec.attempts)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
+        )
+
+    # Verification successful
+    rec.is_used = True
+    user.email_verified = True
+    db.commit()
+
+    membership = (
+        db.query(WorkspaceMembership).filter(WorkspaceMembership.user_id == user.id).first()
+    )
+    ws = db.query(Workspace).filter(Workspace.id == membership.workspace_id).first() if membership else None
+    role = membership.role if membership else "Owner"
+    token = create_access_token(user.id)
+    return AuthTokenOut(access_token=token, user=_build_user_out(user, ws, role))
+
+
+@router.post("/auth/resend-otp", response_model=ResendOTPResponse)
+def resend_otp(payload: ResendOTPRequest, db: Session = Depends(get_db)):
+    email_clean = payload.email.lower().strip()
+    user = db.query(User).filter(User.email == email_clean).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No registered account found with this email.")
+
+    now = datetime.now(timezone.utc)
+    recent = (
+        db.query(EmailVerificationCode)
+        .filter(
+            EmailVerificationCode.email == email_clean,
+            EmailVerificationCode.created_at >= now - timedelta(seconds=30),
+        )
+        .first()
+    )
+    if recent:
+        raise HTTPException(status_code=429, detail="Please wait 30 seconds before requesting a new code.")
+
+    # Invalidate older pending codes
+    db.query(EmailVerificationCode).filter(
+        EmailVerificationCode.email == email_clean,
+        EmailVerificationCode.is_used.is_(False),
+    ).update({"is_used": True})
+
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+    verification_record = EmailVerificationCode(
+        email=email_clean,
+        code=otp_code,
+        expires_at=now + timedelta(minutes=10),
+        is_used=False,
+    )
+    db.add(verification_record)
+    db.commit()
+
+    send_otp_email(to_email=user.email, full_name=user.full_name, otp_code=otp_code)
+
+    return ResendOTPResponse(
+        status="code_sent",
+        email=user.email,
+        message=f"A fresh verification code has been sent to {user.email}.",
+        expires_in_seconds=600,
+        debug_otp=otp_code if (not settings.SMTP_HOST or settings.DEMO_MODE) else None,
+    )
 
 
 @router.post("/auth/login", response_model=AuthTokenOut)
@@ -194,6 +342,28 @@ def login_user(payload: AuthLoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    if not getattr(user, "email_verified", True) and user.email != "alex.morgan@instantly.ai":
+        # Account is unverified; send an OTP and return 403
+        otp_code = f"{secrets.randbelow(900000) + 100000}"
+        db.query(EmailVerificationCode).filter(
+            EmailVerificationCode.email == user.email,
+            EmailVerificationCode.is_used.is_(False),
+        ).update({"is_used": True})
+        db.add(
+            EmailVerificationCode(
+                email=user.email,
+                code=otp_code,
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+                is_used=False,
+            )
+        )
+        db.commit()
+        send_otp_email(to_email=user.email, full_name=user.full_name, otp_code=otp_code)
+        raise HTTPException(
+            status_code=403,
+            detail=f"Email not verified. A verification code has been sent to {user.email}.",
+        )
 
     membership = (
         db.query(WorkspaceMembership).filter(WorkspaceMembership.user_id == user.id).first()
@@ -1245,6 +1415,11 @@ def initiate_integration_connect(
     ctx: tuple[User, Workspace, str] = Depends(get_current_context),
 ):
     user, ws, _ = ctx
+    if not getattr(user, "email_verified", True) and user.email != "alex.morgan@instantly.ai":
+        raise HTTPException(
+            status_code=403,
+            detail="Your email address must be verified before connecting external Gmail or Slack accounts.",
+        )
     integ = (
         db.query(Integration)
         .filter(Integration.workspace_id == ws.id, Integration.platform == platform)
@@ -1538,6 +1713,11 @@ def disconnect_integration(
     ctx: tuple[User, Workspace, str] = Depends(get_current_context),
 ):
     user, ws, _ = ctx
+    if not getattr(user, "email_verified", True) and user.email != "alex.morgan@instantly.ai":
+        raise HTTPException(
+            status_code=403,
+            detail="Your email address must be verified before connecting external Gmail or Slack accounts.",
+        )
     integ = (
         db.query(Integration)
         .filter(Integration.workspace_id == ws.id, Integration.platform == platform)

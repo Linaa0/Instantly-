@@ -255,7 +255,16 @@ def test_authentication_and_permissions(client: TestClient):
         },
     )
     assert reg_res.status_code == 201
-    token = reg_res.json()["access_token"]
+    otp = reg_res.json().get("debug_otp")
+    assert otp is not None
+    # Verify OTP
+    verify_res = client.post(
+        "/api/v1/auth/verify-otp",
+        json={"email": "evaluator@instantly.ai", "code": otp},
+    )
+    assert verify_res.status_code == 200
+    assert verify_res.json()["user"]["email_verified"] is True
+    token = verify_res.json()["access_token"]
 
     # Login
     login_res = client.post(

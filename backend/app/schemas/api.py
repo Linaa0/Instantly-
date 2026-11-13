@@ -278,6 +278,35 @@ class UserOut(BaseModel):
     workspace_name: str
     role: str
     is_demo: bool
+    email_verified: bool = True
+
+
+class AuthRegisterResponse(BaseModel):
+    status: str
+    email: str
+    message: str
+    expires_in_seconds: int = 600
+    debug_otp: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"
+    user: Optional[UserOut] = None
+
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=4, max_length=10)
+
+
+class ResendOTPRequest(BaseModel):
+    email: EmailStr
+
+
+class ResendOTPResponse(BaseModel):
+    status: str
+    email: str
+    message: str
+    expires_in_seconds: int = 600
+    debug_otp: Optional[str] = None
 
 
 class AuthTokenOut(BaseModel):

@@ -1,10 +1,12 @@
 import {
   AnalyticsData,
+  AuthRegisterResult,
   DashboardOverview,
   IntegrationStatus,
   InternalComment,
   MessageAssignment,
   MessageItem,
+  OTPResponse,
   SuggestedReply,
   TaskItem,
   TeamWorkspaceData,
@@ -59,9 +61,19 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   register: (email: string, full_name: string, password: string) =>
-    request<{ access_token: string; user: UserProfile }>("/auth/register", {
+    request<AuthRegisterResult>("/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, full_name, password }),
+    }),
+  verifyOTP: (email: string, code: string) =>
+    request<{ access_token: string; user: UserProfile }>("/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    }),
+  resendOTP: (email: string) =>
+    request<OTPResponse>("/auth/resend-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
     }),
   startDemoSession: () =>
     request<{ access_token: string; user: UserProfile }>("/auth/demo-session", {

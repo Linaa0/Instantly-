@@ -3,15 +3,27 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import text
 from app.api.routes import router as api_router
 from app.core.config import settings
 from app.database.session import Base, SessionLocal, engine
 from app.services.workspace_service import ensure_demo_workspace_seeded
 
 
+def _run_sqlite_column_migrations():
+    """Ensures newly added columns exist in older SQLite databases."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _run_sqlite_column_migrations()
     db = SessionLocal()
     try:
         ensure_demo_workspace_seeded(db)

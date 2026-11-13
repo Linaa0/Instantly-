@@ -40,7 +40,13 @@ export default function IntegrationsPage() {
     } else if (connected === "slack") {
       notify("Slack connected");
     } else if (error) {
-      notify("Couldn't connect Gmail. Try again.", undefined, "warning");
+      const errorMsg =
+        error === "redirect_uri_mismatch"
+          ? "Redirect URI mismatch in Google Cloud Console. Check authorized redirect URIs."
+          : error === "access_denied"
+          ? "Authorization was cancelled or access denied."
+          : `Integration connection failed: ${error}`;
+      notify("Couldn't connect channel", errorMsg, "warning");
     }
 
     queryClient.invalidateQueries({ queryKey: ["integrations"] });
